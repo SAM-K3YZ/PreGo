@@ -1,20 +1,13 @@
+import { NavigationContainer } from '@react-navigation/native';
+import {} from '@react-navigation/bott'
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View } from 'react-native';
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text>PreGo App</Text>
-      <StatusBar style="auto" />
-    </View>
+   <NavigationContainer>
+    {/*<Bottom.*/}
+   </NavigationContainer>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
