@@ -21,6 +21,8 @@ const config: ExpoConfig = {
         backgroundColor: '#FFF8F5',
       },
     ],
+    '@react-native-community/datetimepicker',
+    'expo-sqlite',
   ],
   extra: {
     // Public, non-sensitive config only. Never put secrets here —
