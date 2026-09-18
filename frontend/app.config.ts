@@ -12,6 +12,7 @@ const config: ExpoConfig = {
     'expo-notifications',
     'expo-secure-store',
     'expo-font',
+    'expo-status-bar',
     [
       'expo-splash-screen',
       {
