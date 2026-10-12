@@ -30,7 +30,7 @@ const config: ExpoConfig = {
     // anything in `extra` ships inside the client bundle and is extractable.
     apiUrl:
       process.env.API_URL ||
-      `http://${process.env.EXPO_PUBLIC_LOCAL_IP || '10.245.127.67'}:4000/api/v1`,
+      `http://${process.env.EXPO_PUBLIC_LOCAL_IP || '192.168.0.190'}:4000/api/v1`,
   },
   ios: {
     bundleIdentifier: 'com.exypnos.prego',
@@ -38,6 +38,7 @@ const config: ExpoConfig = {
   },
   android: {
     package: 'com.exypnos.prego',
+    softwareKeyboardLayoutMode: 'resize',
     adaptiveIcon: {
       foregroundImage: './assets/images/prego_logo.png',
       backgroundColor: '#FFF8F5',

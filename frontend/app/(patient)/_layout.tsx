@@ -1,9 +1,12 @@
+import PatientTabBar from '@/components/navigation/PatientTabBar';
 import { lightTheme } from '@/constants/theme';
 import { Tabs } from 'expo-router';
 import * as Icon from 'phosphor-react-native';
+import { ColorValue } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const createTabIcon = (IconComponent: any) => {
-  return ({ focused, color, size }: { focused: boolean; color: string; size: number }) => (
+  return ({ focused, color, size }: { focused: boolean; color: ColorValue; size: number }) => (
     <IconComponent size={size} color={color} weight={focused ? 'fill' : 'regular'} />
   );
 };
@@ -11,27 +14,16 @@ const createTabIcon = (IconComponent: any) => {
 // Bottom tab navigator for the patient role — matches the 5-tab layout
 // from the Notion Phase 10 master style prompt (Home, Log, Doctors, Gallery, Profile).
 export default function PatientLayout() {
+  const insets = useSafeAreaInsets();
+  const bottomOffset = insets.bottom + 4;
+
   return (
     <Tabs
+      tabBar={(props) => <PatientTabBar {...props} />}
       screenOptions={{
-        tabBarStyle: {
-          backgroundColor: lightTheme.background.card,
-          borderTopWidth: 0,
-          height: 74,
-          paddingTop: 10,
-          paddingBottom: 15,
-        },
-        tabBarItemStyle: {
-          justifyContent: 'center',
-          alignItems: 'center',
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          marginTop: 2,
-        },
-        tabBarIconStyle: {
-          width: 20,
-          height: 20,
+        sceneStyle: {
+          backgroundColor: lightTheme.background.app,
+          paddingBottom: 72 + bottomOffset + 12,
         },
       }}
     >

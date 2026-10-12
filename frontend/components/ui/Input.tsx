@@ -17,6 +17,12 @@ const Input = ({
   clearable,
   onClear,
   containerStyle,
+  height,
+  width,
+  style,
+  multiline,
+  textAlignVertical,
+  placeholderTextColor,
   secureTextEntry,
   value,
   onChangeText,
@@ -39,7 +45,7 @@ const Input = ({
       : theme.border;
 
   return (
-    <View style={containerStyle}>
+    <View style={[containerStyle, width !== undefined && { width }]}>
       {label ? (
         <Typo
           size={13}
@@ -53,6 +59,7 @@ const Input = ({
 
       <View
         style={{
+          height,
           flexDirection: 'row',
           alignItems: 'center',
           borderWidth: 1,
@@ -73,11 +80,13 @@ const Input = ({
 
         <TextInput
           {...textInputProps}
+          multiline={multiline}
+          textAlignVertical={textAlignVertical ?? (multiline ? 'top' : 'center')}
           value={value}
           onChangeText={onChangeText}
           editable={editable}
           secureTextEntry={secureTextEntry && !isSecureVisible}
-          placeholderTextColor={theme.text.secondary}
+          placeholderTextColor={placeholderTextColor ?? theme.text.secondary}
           onFocus={(e) => {
             setIsFocused(true);
             textInputProps.onFocus?.(e);
@@ -86,12 +95,13 @@ const Input = ({
             setIsFocused(false);
             textInputProps.onBlur?.(e);
           }}
-          style={{
+          style={[{
             flex: 1,
+            ...(height !== undefined && { alignSelf: 'stretch' as const }),
             paddingVertical: verticalScale(14),
             fontSize: verticalScale(15),
             color: theme.text.primary,
-          }}
+          }, style]}
         />
 
         {secureTextEntry ? (

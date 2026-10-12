@@ -1,15 +1,37 @@
 import Typo from '@/components/Typo';
-import { Button, Screen } from '@/components/ui';
+import { Button, Input, Screen } from '@/components/ui';
 import { lightTheme, spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
-import RNDateTimePicker from '@react-native-community/datetimepicker';
-import { useState } from 'react';
-import { Modal, Platform, Pressable, ScrollView, TextInput, View, StyleSheet } from 'react-native';
+import RNDateTimePicker, {
+  type DateTimePickerChangeEvent,
+} from '@react-native-community/datetimepicker';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Keyboard,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  TextInput,
+  View,
+  StyleSheet,
+  Alert,
+} from 'react-native';
 import * as Icon from 'phosphor-react-native';
+import { logService } from '@/services/logService';
+import { getApiErrorMessage } from '@/utils/apiError';
 
 const DateCaret = () => (
   <Icon.CaretDownIcon color={lightTheme.text.primary} size={verticalScale(18)} />
 );
+
+const severityOptions = [
+  { value: 1, label: 'Mild', color: lightTheme.semantic.success },
+  { value: 2, label: 'Mild', color: lightTheme.semantic.success },
+  { value: 3, label: 'High', color: lightTheme.semantic.warning },
+  { value: 4, label: 'High', color: lightTheme.semantic.warning },
+  { value: 5, label: 'Very severe', color: lightTheme.semantic.error },
+];
 
 const experienceData = [
   { id: 1, title: 'Nausea' },
@@ -36,17 +58,42 @@ const moreExperienceData = [
 ];
 
 export default function Log() {
+  // Replace this placeholder with the assigned doctor from the backend.
+  const doctor = { name: 'Dr. Adeyemi', initials: 'TA' };
+  const scrollViewRef = useRef<ScrollView>(null);
+  const noteFocused = useRef(false);
+
+  // Wait for the keyboard insets to settle before revealing the final form field.
+  useEffect(() => {
+    let frame: number | undefined;
+    const subscription = Keyboard.addListener('keyboardDidShow', () => {
+      if (noteFocused.current) {
+        frame = requestAnimationFrame(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        });
+      }
+    });
+    return () => {
+      subscription.remove();
+      if (frame !== undefined) cancelAnimationFrame(frame);
+    };
+  }, []);
+
   const [logDate, setLogDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showExperienceModal, setShowExperienceModal] = useState(false);
   const [selectedExperiences, setSelectedExperiences] = useState<number[]>([]);
   const [customExperiences, setCustomExperiences] = useState<{ id: number; title: string }[]>([]);
   const [experienceSearch, setExperienceSearch] = useState('');
+  const [selectedSeverity, setSelectedSeverity] = useState(severityOptions[0]);
+  const [visibility, setVisibility] = useState(false);
+  const [note, setNote] = useState('');
+  const canSubmit = selectedExperiences.length > 0;
+  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
 
-  const handleDateChange = (_event: unknown, selectedDate?: Date) => {
-    if (selectedDate) {
-      setLogDate(selectedDate);
-    }
+  const handleDateChange = (_event: DateTimePickerChangeEvent, selectedDate: Date) => {
+    setLogDate(selectedDate);
 
     if (Platform.OS === 'android') {
       setShowDatePicker(false);
@@ -94,8 +141,42 @@ export default function Log() {
     setExperienceSearch('');
   };
 
+  const handleSaveEntry = async () => {
+    if (!canSubmit || savingRef.current) return;
+
+    savingRef.current = true;
+    setIsSaving(true);
+    Keyboard.dismiss();
+
+    try {
+      await logService.saveSymptomEntry({
+        experiences: [...experienceData, ...moreExperienceData, ...customExperiences]
+          .filter((experience) => selectedExperiences.includes(experience.id))
+          .map(({ id, title }) => ({ id, title })),
+        severity: selectedSeverity.value,
+        note: note.trim() || undefined,
+        loggedAt: logDate.toISOString(),
+        visibility,
+      });
+
+      setSelectedExperiences([]);
+      setCustomExperiences([]);
+      setExperienceSearch('');
+      setNote('');
+      setSelectedSeverity(severityOptions[0]);
+      setLogDate(new Date());
+      setVisibility(false);
+      Alert.alert('Entry saved', 'Your symptom entry has been saved.');
+    } catch (error) {
+      Alert.alert('Unable to save entry', getApiErrorMessage(error, 'Please try again.'));
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
+    }
+  };
+
   return (
-    <Screen scroll>
+    <Screen scroll keyboardAware scrollViewRef={scrollViewRef}>
       {/* top */}
       <View style={styles.top}>
         <View>
@@ -117,7 +198,7 @@ export default function Log() {
       </View>
 
       {/* body */}
-      <View style={{ gap: 10 }}>
+      <View style={{ gap: 15 }} pointerEvents={isSaving ? 'none' : 'auto'}>
         {/* calendar */}
         <Pressable onPress={() => setShowDatePicker(true)} style={styles.dateButton}>
           <Typo size={16} color={lightTheme.text.primary}>
@@ -129,7 +210,8 @@ export default function Log() {
           <RNDateTimePicker
             mode="date"
             value={logDate}
-            onChange={handleDateChange}
+            onValueChange={handleDateChange}
+            onDismiss={() => setShowDatePicker(false)}
             display="default"
           />
         ) : null}
@@ -145,7 +227,8 @@ export default function Log() {
                 <RNDateTimePicker
                   mode="date"
                   value={logDate}
-                  onChange={handleDateChange}
+                  onValueChange={handleDateChange}
+                  onDismiss={() => setShowDatePicker(false)}
                   display="spinner"
                 />
                 <Pressable onPress={() => setShowDatePicker(false)} style={styles.doneButton}>
@@ -160,7 +243,7 @@ export default function Log() {
 
         {/* experincing */}
         <View style={styles.experince}>
-          <View style={{ gap: 8}}>
+          <View style={{ gap: 8 }}>
             <Typo size={verticalScale(16)} fontWeight={'medium'} color={lightTheme.text.primary}>
               What are you experincing?
             </Typo>
@@ -193,6 +276,136 @@ export default function Log() {
             })}
           </View>
         </View>
+
+        {/* Severity */}
+        <View style={styles.severity}>
+          <View style={styles.severityHeader}>
+            <Typo size={verticalScale(16)} fontWeight={'medium'} color={lightTheme.text.primary}>
+              Severity
+            </Typo>
+            <Typo
+              size={verticalScale(14)}
+              fontWeight="medium"
+              color={selectedSeverity.color}
+              textProps={{ accessibilityLiveRegion: 'polite' }}
+            >
+              {selectedSeverity.value}/5 - {selectedSeverity.label}
+            </Typo>
+          </View>
+          <View style={styles.severityOptions}>
+            {severityOptions.map((option) => {
+              const isSelected = selectedSeverity.value === option.value;
+
+              return (
+                <Pressable
+                  key={option.value}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${option.value} out of 5 - ${option.label}`}
+                  accessibilityState={{ selected: isSelected }}
+                  onPress={() => setSelectedSeverity(option)}
+                  style={[
+                    styles.severityOption,
+                    {
+                      borderColor: option.color,
+                      backgroundColor: isSelected ? option.color : lightTheme.background.card,
+                    },
+                  ]}
+                >
+                  <Typo
+                    size={verticalScale(16)}
+                    fontWeight="semibold"
+                    color={isSelected ? lightTheme.background.card : option.color}
+                  >
+                    {option.value}
+                  </Typo>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={{ justifyContent: 'space-between', flexDirection: 'row' }}>
+            <Typo color={lightTheme.text.primary} size={verticalScale(12)} fontWeight={'regular'}>
+              Minimal
+            </Typo>
+            <Typo color={lightTheme.text.primary} size={verticalScale(12)} fontWeight={'regular'}>
+              Severe
+            </Typo>
+          </View>
+        </View>
+
+        {/* note */}
+        <View style={styles.note}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <Typo size={verticalScale(16)} fontWeight={'bold'}>
+              Add a note
+            </Typo>
+            <Typo size={verticalScale(12)} fontWeight={'light'}>
+              (optional)
+            </Typo>
+          </View>
+          <View>
+            <Input
+              multiline
+              textAlignVertical="top"
+              accessibilityLabel="Add a note"
+              value={note}
+              onChangeText={setNote}
+              onFocus={() => {
+                noteFocused.current = true;
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+              }}
+              onBlur={() => {
+                noteFocused.current = false;
+              }}
+              height={verticalScale(80)}
+              width={'100%'}
+              placeholderTextColor={lightTheme.text.secondary}
+              placeholder="Describe how you are feeling in more detail..."
+            ></Input>
+          </View>
+        </View>
+
+        {/* visibility */}
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityLabel={`Share this log with ${doctor.name}`}
+          accessibilityState={{ checked: visibility }}
+          onPress={() => setVisibility((current) => !current)}
+          style={styles.visibilityCard}
+        >
+          {visibility && (
+            <View style={styles.doctorAvatar}>
+              <Typo
+                size={verticalScale(10)}
+                fontWeight="semibold"
+                color={lightTheme.secondary.dark}
+              >
+                {doctor.initials}
+              </Typo>
+            </View>
+          )}
+          <View style={styles.visibilityLabel}>
+            <Typo
+              size={verticalScale(13)}
+              fontWeight="medium"
+              color={visibility ? lightTheme.text.primary : lightTheme.text.secondary}
+            >
+              {visibility ? `Visible to ${doctor.name}` : 'Private — not shared'}
+            </Typo>
+          </View>
+          <View style={[styles.visibilityTrack, visibility && styles.visibilityTrackActive]}>
+            <View style={[styles.visibilityThumb, visibility && styles.visibilityThumbActive]} />
+          </View>
+        </Pressable>
+
+        {/* save entry */}
+        <Button
+          title="Save Entry"
+          disabled={!canSubmit || isSaving}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canSubmit || isSaving, busy: isSaving }}
+          onPress={handleSaveEntry}
+          loading={isSaving}
+        />
       </View>
 
       <Modal
@@ -404,5 +617,83 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     marginTop: spacingY.md,
     paddingVertical: spacingY.md,
+  },
+
+  severity: {
+    gap: 13,
+    marginTop: spacingX.md,
+  },
+
+  note: {
+    gap: 13,
+    marginTop: spacingX.md,
+  },
+  severityHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: spacingX.sm,
+  },
+  severityOptions: {
+    flexDirection: 'row',
+    gap: spacingX.sm,
+  },
+  severityOption: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: spacingY.md,
+  },
+  visibilityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacingX.sm,
+    minHeight: 50,
+    marginTop: spacingY.md,
+    paddingHorizontal: spacingX.md,
+    paddingVertical: spacingY.sm,
+    backgroundColor: lightTheme.background.card,
+    borderColor: lightTheme.border,
+    borderWidth: 1,
+    borderRadius: 16,
+  },
+  doctorAvatar: {
+    width: 26,
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: '#E8F2E5',
+    borderColor: '#D8E8D3',
+    borderWidth: 1,
+  },
+  visibilityLabel: {
+    flex: 1,
+  },
+  visibilityTrack: {
+    width: 38,
+    height: 22,
+    borderRadius: 999,
+    backgroundColor: lightTheme.border,
+    padding: 2,
+    justifyContent: 'center',
+  },
+  visibilityTrackActive: {
+    backgroundColor: lightTheme.secondary.default,
+    borderColor: lightTheme.secondary.default,
+  },
+  visibilityThumb: {
+    width: 16,
+    height: 16,
+    borderRadius: 999,
+    backgroundColor: lightTheme.background.card,
+    alignSelf: 'flex-start',
+  },
+  visibilityThumbActive: {
+    alignSelf: 'flex-end',
   },
 });

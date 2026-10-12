@@ -1,5 +1,13 @@
-import { ReactNode } from 'react';
-import { TextProps, TextStyle, TextInputProps, ViewStyle, PressableProps } from 'react-native';
+import { ReactNode, Ref } from 'react';
+import {
+  TextProps,
+  TextStyle,
+  TextInputProps,
+  ViewStyle,
+  PressableProps,
+  ScrollView,
+  ScrollViewProps,
+} from 'react-native';
 import type { Icon } from 'phosphor-react-native';
 import type { Country } from '@/constants/countries';
 import { number } from 'zod';
@@ -14,7 +22,9 @@ export interface TypoProps {
   numberOfLines?: number;
 }
 
-export interface InputProps extends Omit<TextInputProps, 'style'> {
+export interface InputProps extends TextInputProps {
+  height?: ViewStyle['height'];
+  width?: ViewStyle['width'];
   label?: string;
   helperText?: string;
   errorText?: string;
@@ -52,6 +62,9 @@ export interface CardProps {
 export interface ScreenProps {
   children: ReactNode;
   scroll?: boolean;
+  keyboardAware?: boolean;
+  scrollViewRef?: Ref<ScrollView>;
+  onScrollLayout?: ScrollViewProps['onLayout'];
   center?: boolean;
   style?: ViewStyle;
   padding?: number;
@@ -96,4 +109,12 @@ export interface SkeletonProps {
   height?: number;
   borderRadius?: number;
   style?: ViewStyle | ViewStyle[];
+}
+
+export interface SymptomEntryPayload {
+  experiences: { id: number; title: string }[];
+  severity: number;
+  note?: string;
+  loggedAt: string;
+  visibility: boolean;
 }
