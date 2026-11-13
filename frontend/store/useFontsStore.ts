@@ -1,9 +1,5 @@
 import { create } from 'zustand';
-
-interface FontsState {
-  fontsLoaded: boolean;
-  setFontsLoaded: (loaded: boolean) => void;
-}
+import type { FontsState } from '@/types';
 
 export const useFontsStore = create<FontsState>((set) => ({
   fontsLoaded: false,

@@ -1,5 +1,6 @@
 import { useColorScheme } from 'react-native';
-import { lightTheme, darkTheme, Theme } from '../constants/theme';
+import { lightTheme, darkTheme } from '@/constants/theme';
+import type { Theme } from '@/types';
 
 export function useTheme(overridePreference?: 'light' | 'dark'): Theme {
   const systemScheme = useColorScheme();

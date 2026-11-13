@@ -1,4 +1,11 @@
-import { KeyboardAvoidingView, Platform, View, ScrollView, ViewStyle } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  RefreshControl,
+  View,
+  ScrollView,
+  ViewStyle,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/hooks/useTheme';
 import { spacingX, spacingY } from '@/constants/theme';
@@ -13,8 +20,11 @@ const Screen = ({
   center = false,
   style,
   padding = spacingX.xl,
+  refreshing = false,
+  onRefresh,
 }: ScreenProps) => {
   const theme = useTheme();
+  const scrollable = scroll || !!onRefresh;
 
   const contentStyle: ViewStyle = {
     flexGrow: 1,
@@ -32,7 +42,7 @@ const Screen = ({
       behavior="height"
     >
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.background.app }} edges={['top']}>
-        {scroll ? (
+        {scrollable ? (
           <ScrollView
             ref={scrollViewRef}
             style={{ flex: 1 }}
@@ -41,6 +51,18 @@ const Screen = ({
             automaticallyAdjustKeyboardInsets={keyboardAware && Platform.OS === 'ios'}
             keyboardDismissMode={keyboardAware ? 'on-drag' : 'none'}
             keyboardShouldPersistTaps="handled"
+            alwaysBounceVertical={!!onRefresh}
+            refreshControl={
+              onRefresh ? (
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor={theme.accent.default}
+                  colors={[theme.accent.default]}
+                  progressBackgroundColor={theme.background.card}
+                />
+              ) : undefined
+            }
           >
             {children}
           </ScrollView>

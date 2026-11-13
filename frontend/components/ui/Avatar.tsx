@@ -1,11 +1,11 @@
 import { Image, ImageStyle, View, ViewStyle } from 'react-native';
-import { UserIcon } from 'phosphor-react-native';
+import * as Icon from 'phosphor-react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { scale } from '@/utils/styling';
 import Typo from '@/components/Typo';
 import { AvatarProps } from '@/types';
 
-const getInitials = (name?: string) => {
+export const getInitials = (name?: string) => {
   if (!name) return '';
   const parts = name.trim().split(/\s+/);
   return parts
@@ -42,7 +42,7 @@ const Avatar = ({ uri, name, size = 48, style }: AvatarProps) => {
           {initials}
         </Typo>
       ) : (
-        <UserIcon size={dimension * 0.55} color={theme.accent.pressed} weight="fill" />
+        <Icon.UserIcon size={dimension * 0.55} color={theme.accent.pressed} weight="fill" />
       )}
     </View>
   );

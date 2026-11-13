@@ -1,10 +1,14 @@
 import { Dimensions, FlatList, Image, StyleSheet, View } from 'react-native';
-import { useRef, useState } from 'react';
+import { useRef, useState, useMemo } from 'react';
+import type { Href } from 'expo-router';
 import { Screen, Button } from '@/components/ui';
 import { useRouter } from 'expo-router';
 import Typo from '@/components/Typo';
+import type { Theme } from '@/types';
+import { useTheme } from '@/hooks/useTheme';
 import { verticalScale } from '@/utils/styling';
-import { lightTheme, spacingX, spacingY, radius } from '@/constants/theme';
+import { spacingX, spacingY, radius } from '@/constants/theme';
+import { markOnboardingCompleted } from '@/services/onboardingFlag';
 
 const { width } = Dimensions.get('window');
 
@@ -31,22 +35,39 @@ const onboardingData = [
   },
 ];
 
-const onboarding = () => {
+const Onboarding = () => {
+  const theme = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [currentPage, setCurrentPage] = useState(0);
   const flatListRef = useRef<FlatList>(null);
+  const finishing = useRef(false);
   const router = useRouter();
+  const lastIndex = onboardingData.length - 1;
+  const isLastSlide = currentPage === lastIndex;
 
   const handleNext = () => {
-    if (currentPage < onboardingData.length - 1) {
+    if (currentPage < lastIndex) {
       flatListRef.current?.scrollToIndex({ index: currentPage + 1 });
       setCurrentPage((prev) => prev + 1);
-    } else {
-      router.replace('/(auth)/sign-up');
     }
   };
 
+  // Skip goes to the last slide, so the user still sees both choices.
   const handleSkip = () => {
-    router.replace('/(auth)/sign-up');
+    flatListRef.current?.scrollToIndex({ index: lastIndex });
+    setCurrentPage(lastIndex);
+  };
+
+  // Onboarding only counts as done once the user picks sign up or sign in.
+  const finish = async (href: Href) => {
+    if (finishing.current) return;
+    finishing.current = true;
+    try {
+      await markOnboardingCompleted();
+    } catch {
+      // Navigate anyway; at worst onboarding shows once more next launch.
+    }
+    router.replace(href);
   };
 
   return (
@@ -77,16 +98,16 @@ const onboarding = () => {
               <View style={styles.textArea}>
                 <Typo
                   style={styles.title}
-                  color={lightTheme.text.primary}
-                  size={verticalScale(30)}
+                  color={theme.text.primary}
+                  size={30}
                   fontWeight={'bold'}
                 >
                   {item.title}
                 </Typo>
                 <Typo
                   style={styles.subTitle}
-                  color={lightTheme.text.secondary}
-                  size={verticalScale(15)}
+                  color={theme.text.secondary}
+                  size={15}
                   fontWeight={'normal'}
                 >
                   {item.subTitle}
@@ -106,7 +127,7 @@ const onboarding = () => {
                 styles.dot,
                 {
                   backgroundColor:
-                    index === currentPage ? lightTheme.accent.default : lightTheme.border,
+                    index === currentPage ? theme.accent.default : theme.border,
                   width: index === currentPage ? verticalScale(20) : verticalScale(8),
                 },
               ]}
@@ -114,19 +135,36 @@ const onboarding = () => {
           ))}
         </View>
 
-        <Button
-          title={currentPage === onboardingData.length - 1 ? 'Get Started' : 'Continue'}
-          onPress={handleNext}
-          style={{ borderRadius: radius.md }}
-        />
+        {isLastSlide ? (
+          <View style={styles.actions}>
+            <Button
+              title="Get started"
+              accessibilityRole="button"
+              accessibilityLabel="Get started, create an account"
+              onPress={() => finish('/(auth)/sign-up')}
+              style={{ borderRadius: radius.md }}
+            />
+            <Button
+              title="I already have an account"
+              variant="ghost"
+              accessibilityRole="button"
+              accessibilityLabel="I already have an account, sign in"
+              onPress={() => finish('/(auth)/sign-in')}
+            />
+          </View>
+        ) : (
+          <Button title="Continue" onPress={handleNext} style={{ borderRadius: radius.md }} />
+        )}
       </View>
     </Screen>
   );
 };
 
-export default onboarding;
+export default Onboarding;
 
-const styles = StyleSheet.create({
+// Built per theme so colours follow light/dark mode.
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
   slide: {
     width,
     paddingHorizontal: spacingX.xl,
@@ -136,7 +174,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: verticalScale(320),
     borderRadius: radius.xxl,
-    backgroundColor: lightTheme.accent.tint,
+    backgroundColor: theme.accent.tint,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -175,6 +213,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacingX.xs,
     marginBottom: spacingY.xl,
+  },
+  actions: {
+    gap: spacingY.sm,
   },
   dot: {
     height: verticalScale(8),

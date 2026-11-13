@@ -1,24 +1,34 @@
-import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { useState, useMemo, useRef } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { EnvelopeIcon, UserIcon } from 'phosphor-react-native';
+import * as Icon from 'phosphor-react-native';
 import { Button, Input, PhoneInput, Screen } from '@/components/ui';
 import Typo from '@/components/Typo';
 import AuthHeader from '@/components/AuthHeader';
-import { lightTheme, spacingX, spacingY, radius } from '@/constants/theme';
+import { spacingX, spacingY, radius } from '@/constants/theme';
 import { authService } from '@/services/authService';
-import { SignUpRole } from '@/types';
-import { defaultCountry, Country } from '@/constants/countries';
-import { getEmailError, getPasswordError } from '@/utils/validation';
-import { getApiErrorMessage } from '@/utils/apiError';
+import type { SignUpRole, Country, Theme } from '@/types';
+import { defaultCountry } from '@/constants/countries';
+import {
+  getEmailError,
+  getPasswordError,
+  getPhoneError,
+  normalizeEmail,
+  toNationalNumber,
+} from '@/utils/validation';
+import { getApiErrorMessage } from '@/services/apiError';
+import { useTheme } from '@/hooks/useTheme';
 
 export default function SignUp() {
   const router = useRouter();
+  const theme = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [role, setRole] = useState<SignUpRole>('patient');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [emailTouched, setEmailTouched] = useState(false);
   const [phone, setPhone] = useState('');
+  const [phoneTouched, setPhoneTouched] = useState(false);
   const [phoneCountry, setPhoneCountry] = useState<Country>(defaultCountry);
   const [password, setPassword] = useState('');
   const [passwordTouched, setPasswordTouched] = useState(false);
@@ -26,15 +36,18 @@ export default function SignUp() {
   const [specialty, setSpecialty] = useState('');
   const [hospitalName, setHospitalName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const emailError = getEmailError(email);
   const passwordError = getPasswordError(password);
+  const phoneError = getPhoneError(phone);
 
   const isFormValid =
     fullName.trim().length > 0 &&
     email.length > 0 &&
     !emailError &&
     phone.trim().length > 0 &&
+    !phoneError &&
     password.length > 0 &&
     !passwordError &&
     (role === 'patient' ||
@@ -48,16 +61,19 @@ export default function SignUp() {
     setIsSubmitting(true);
     try {
       await authService.signUp({
-        email,
+        email: normalizeEmail(email),
         password,
         role,
-        fullName,
-        phone: `${phoneCountry.dialCode}${phone}`,
+        fullName: fullName.trim(),
+        phone: `${phoneCountry.dialCode}${toNationalNumber(phone)}`,
         ...(role === 'doctor' ? { licenseNumber, specialty, hospitalName } : {}),
       });
       router.push('/(auth)/verify-otp');
     } catch (err) {
-      Alert.alert('Sign up failed', getApiErrorMessage(err, 'Please check your details and try again.'));
+      Alert.alert(
+        'Sign up failed',
+        getApiErrorMessage(err, 'Please check your details and try again.'),
+      );
     } finally {
       // Don't let the password linger in memory/state longer than the
       // single request that needed it — regardless of outcome.
@@ -68,20 +84,15 @@ export default function SignUp() {
   };
 
   return (
-    <Screen scroll>
+    <Screen scroll keyboardAware scrollViewRef={scrollViewRef}>
       <AuthHeader />
 
       {/* middle */}
       <View>
-        <Typo
-          size={24}
-          color={lightTheme.text.primary}
-          fontWeight="bold"
-          style={{ marginBottom: 4 }}
-        >
+        <Typo size={24} color={theme.text.primary} fontWeight="bold" style={{ marginBottom: 4 }}>
           Create your account
         </Typo>
-        <Typo size={14} color={lightTheme.text.secondary} style={{ marginBottom: spacingY.xl }}>
+        <Typo size={14} color={theme.text.secondary} style={{ marginBottom: spacingY.xl }}>
           Join 12,000+ women on their pregnancy journey
         </Typo>
 
@@ -93,7 +104,7 @@ export default function SignUp() {
             <Typo
               size={14}
               fontWeight="700"
-              color={role === 'patient' ? '#FFFFFF' : lightTheme.text.secondary}
+              color={role === 'patient' ? theme.text.onAccent : theme.text.secondary}
             >
               I&apos;m a patient
             </Typo>
@@ -105,7 +116,7 @@ export default function SignUp() {
             <Typo
               size={14}
               fontWeight="700"
-              color={role === 'doctor' ? '#FFFFFF' : lightTheme.text.secondary}
+              color={role === 'doctor' ? theme.text.onAccent : theme.text.secondary}
             >
               I&apos;m a doctor
             </Typo>
@@ -115,7 +126,7 @@ export default function SignUp() {
         <Input
           label="Full name"
           placeholder="Adaeze Okonkwo"
-          leftIcon={UserIcon}
+          leftIcon={Icon.UserIcon}
           keyboardType="default"
           autoCapitalize="words"
           autoComplete="name"
@@ -127,7 +138,7 @@ export default function SignUp() {
         <Input
           label="Email address"
           placeholder="adaeze@email.com"
-          leftIcon={EnvelopeIcon}
+          leftIcon={Icon.EnvelopeIcon}
           keyboardType="email-address"
           autoCapitalize="none"
           autoCorrect={false}
@@ -147,6 +158,8 @@ export default function SignUp() {
           onCountryChange={setPhoneCountry}
           value={phone}
           onChangeText={setPhone}
+          onBlur={() => setPhoneTouched(true)}
+          errorText={phoneTouched ? phoneError : undefined}
           containerStyle={styles.field}
         />
 
@@ -211,18 +224,25 @@ export default function SignUp() {
       {/* footer*/}
       <View style={styles.footer}>
         <Pressable
-          onPress={() => router.push('/(auth)/sign-in')}
-          style={{ flexDirection: 'row', marginBottom: spacingY.md }}
+          onPress={() => router.replace('/(auth)/sign-in')}
+          accessibilityRole="link"
+          accessibilityLabel="Already have an account? Sign in"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            minHeight: 44,
+            marginBottom: spacingY.md,
+          }}
         >
-          <Typo size={14} color={lightTheme.text.secondary}>
+          <Typo size={14} color={theme.text.secondary}>
             Already have an account?{' '}
           </Typo>
-          <Typo size={14} fontWeight="700" color={lightTheme.accent.default}>
-            Sign In
+          <Typo size={14} fontWeight="700" color={theme.accent.default}>
+            Sign in
           </Typo>
         </Pressable>
 
-        <Typo size={12} color={lightTheme.text.secondary} style={{ textAlign: 'center' }}>
+        <Typo size={12} color={theme.text.secondary} style={{ textAlign: 'center' }}>
           By signing up you agree to our Terms of Service and Privacy Policy
         </Typo>
       </View>
@@ -230,30 +250,32 @@ export default function SignUp() {
   );
 }
 
-const styles = StyleSheet.create({
-  roleToggle: {
-    flexDirection: 'row',
-    backgroundColor: lightTheme.border,
-    borderRadius: radius.full,
-    padding: 4,
-    marginBottom: spacingY.xl,
-  },
-  roleOption: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: radius.full,
-    alignItems: 'center',
-  },
-  roleOptionActive: {
-    backgroundColor: lightTheme.accent.default,
-  },
-  field: {
-    marginBottom: spacingY.lg,
-  },
-  footer: {
-    alignItems: 'center',
-    paddingHorizontal: spacingX.xl,
-    paddingBottom: spacingY.xxl,
-    paddingTop: spacingY.md,
-  },
-});
+// Built per theme so colours follow light/dark mode.
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
+    roleToggle: {
+      flexDirection: 'row',
+      backgroundColor: theme.border,
+      borderRadius: radius.full,
+      padding: 4,
+      marginBottom: spacingY.xl,
+    },
+    roleOption: {
+      flex: 1,
+      paddingVertical: 10,
+      borderRadius: radius.full,
+      alignItems: 'center',
+    },
+    roleOptionActive: {
+      backgroundColor: theme.accent.default,
+    },
+    field: {
+      marginBottom: spacingY.lg,
+    },
+    footer: {
+      alignItems: 'center',
+      paddingHorizontal: spacingX.xl,
+      paddingBottom: spacingY.xxl,
+      paddingTop: spacingY.md,
+    },
+  });

@@ -5,6 +5,10 @@ export { default as Screen } from './Screen';
 export { default as Avatar } from './Avatar';
 export { default as Badge } from './Badge';
 export { default as PhoneInput } from './PhoneInput';
+export { default as OptionCard } from './OptionCard';
+export { default as ConfirmDialog } from './ConfirmDialog';
+export { default as Banner } from './Banner';
+export { default as BottomSheet } from './BottomSheet';
 
 export type {
   InputProps,
@@ -17,4 +21,8 @@ export type {
   BadgeProps,
   BadgeVariant,
   PhoneInputProps,
+  OptionCardProps,
+  ConfirmDialogProps,
+  BannerProps,
+  BottomSheetProps,
 } from '@/types';

@@ -1,7 +1,7 @@
-import { lightTheme } from '@/constants/theme';
 import { TypoProps } from '@/types';
 import { verticalScale } from '@/utils/styling';
 import { useFontsStore } from '@/store/useFontsStore';
+import { useTheme } from '@/hooks/useTheme';
 import React from 'react';
 import { Text, TextStyle } from 'react-native';
 
@@ -37,18 +37,19 @@ const getFontFamily = (fontWeight: string | number = '400') => {
 
 const Typo = ({
   size = 16,
-  color = lightTheme.text.primary,
+  color,
   fontWeight = '400',
   children,
   style,
   textProps = {},
   numberOfLines,
 }: TypoProps) => {
+  const theme = useTheme();
   const fontsLoaded = useFontsStore((s) => s.fontsLoaded);
 
   const textStyle: TextStyle = {
     fontSize: verticalScale(size),
-    color,
+    color: color ?? theme.text.primary, // follows light/dark mode when no colour is given
     fontFamily: fontsLoaded ? getFontFamily(fontWeight) : undefined,
   };
 

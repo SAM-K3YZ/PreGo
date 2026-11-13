@@ -1,11 +1,13 @@
 import Typo from '@/components/Typo';
+import type { SeverityOption, Theme } from '@/types';
+import { useTheme } from '@/hooks/useTheme';
 import { Button, Input, Screen } from '@/components/ui';
-import { lightTheme, spacingX, spacingY } from '@/constants/theme';
+import { spacingX, spacingY } from '@/constants/theme';
 import { verticalScale } from '@/utils/styling';
 import RNDateTimePicker, {
   type DateTimePickerChangeEvent,
 } from '@react-native-community/datetimepicker';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import {
   Keyboard,
   Modal,
@@ -19,18 +21,19 @@ import {
 } from 'react-native';
 import * as Icon from 'phosphor-react-native';
 import { logService } from '@/services/logService';
-import { getApiErrorMessage } from '@/utils/apiError';
+import { getApiErrorMessage } from '@/services/apiError';
 
-const DateCaret = () => (
-  <Icon.CaretDownIcon color={lightTheme.text.primary} size={verticalScale(18)} />
-);
+const DateCaret = () => {
+  const theme = useTheme();
+  return <Icon.CaretDownIcon color={theme.text.primary} size={verticalScale(18)} />;
+};
 
-const severityOptions = [
-  { value: 1, label: 'Mild', color: lightTheme.semantic.success },
-  { value: 2, label: 'Mild', color: lightTheme.semantic.success },
-  { value: 3, label: 'High', color: lightTheme.semantic.warning },
-  { value: 4, label: 'High', color: lightTheme.semantic.warning },
-  { value: 5, label: 'Very severe', color: lightTheme.semantic.error },
+const severityOptions: SeverityOption[] = [
+  { value: 1, label: 'Minimal', tone: 'success' },
+  { value: 2, label: 'Mild', tone: 'success' },
+  { value: 3, label: 'Moderate', tone: 'warning' },
+  { value: 4, label: 'Severe', tone: 'warning' },
+  { value: 5, label: 'Very severe', tone: 'error' },
 ];
 
 const experienceData = [
@@ -43,7 +46,7 @@ const experienceData = [
   { id: 7, title: 'Dizziness' },
   { id: 8, title: 'Swelling' },
   { id: 9, title: 'Mood changes' },
-  { id: 10, title: '+ Other', isOther: true },
+  { id: 10, title: 'Other', isOther: true },
 ];
 
 const moreExperienceData = [
@@ -58,6 +61,8 @@ const moreExperienceData = [
 ];
 
 export default function Log() {
+  const theme = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   // Replace this placeholder with the assigned doctor from the backend.
   const doctor = { name: 'Dr. Adeyemi', initials: 'TA' };
   const scrollViewRef = useRef<ScrollView>(null);
@@ -180,10 +185,10 @@ export default function Log() {
       {/* top */}
       <View style={styles.top}>
         <View>
-          <Typo size={verticalScale(20)} fontWeight={'bold'} color={lightTheme.text.primary}>
+          <Typo size={20} fontWeight={'bold'} color={theme.text.primary}>
             Log Symtomps
           </Typo>
-          <Typo size={verticalScale(14)} fontWeight={'regular'} color={lightTheme.text.primary}>
+          <Typo size={14} fontWeight={'regular'} color={theme.text.secondary}>
             How are you feeling today?
           </Typo>
         </View>
@@ -191,8 +196,8 @@ export default function Log() {
         <Button
           title="History"
           variant="outline"
-          borderColor={lightTheme.text.secondary}
-          color={lightTheme.text.secondary}
+          borderColor={theme.text.secondary}
+          color={theme.text.secondary}
           style={{ padding: spacingY.md }}
         />
       </View>
@@ -201,7 +206,7 @@ export default function Log() {
       <View style={{ gap: 15 }} pointerEvents={isSaving ? 'none' : 'auto'}>
         {/* calendar */}
         <Pressable onPress={() => setShowDatePicker(true)} style={styles.dateButton}>
-          <Typo size={16} color={lightTheme.text.primary}>
+          <Typo size={16} color={theme.text.primary}>
             {dateLabel}
           </Typo>
           <DateCaret />
@@ -210,6 +215,7 @@ export default function Log() {
           <RNDateTimePicker
             mode="date"
             value={logDate}
+            maximumDate={new Date()}
             onValueChange={handleDateChange}
             onDismiss={() => setShowDatePicker(false)}
             display="default"
@@ -227,12 +233,13 @@ export default function Log() {
                 <RNDateTimePicker
                   mode="date"
                   value={logDate}
+                  maximumDate={new Date()}
                   onValueChange={handleDateChange}
                   onDismiss={() => setShowDatePicker(false)}
                   display="spinner"
                 />
                 <Pressable onPress={() => setShowDatePicker(false)} style={styles.doneButton}>
-                  <Typo size={16} fontWeight="600" color={lightTheme.accent.default}>
+                  <Typo size={16} fontWeight="600" color={theme.accent.default}>
                     Done
                   </Typo>
                 </Pressable>
@@ -244,10 +251,10 @@ export default function Log() {
         {/* experincing */}
         <View style={styles.experince}>
           <View style={{ gap: 8 }}>
-            <Typo size={verticalScale(16)} fontWeight={'medium'} color={lightTheme.text.primary}>
+            <Typo size={16} fontWeight={'medium'} color={theme.text.primary}>
               What are you experincing?
             </Typo>
-            <Typo size={verticalScale(12)} fontWeight={'regular'} color={lightTheme.text.primary}>
+            <Typo size={12} fontWeight={'regular'} color={theme.text.primary}>
               Select all that apply
             </Typo>
           </View>
@@ -262,12 +269,25 @@ export default function Log() {
                   onPress={() =>
                     isOther ? setShowExperienceModal(true) : toggleExperience(experience.id)
                   }
-                  style={[styles.experienceOption, isSelected && styles.selectedExperience]}
+                  accessibilityRole="button"
+                  accessibilityLabel={isOther ? 'Add another experience' : experience.title}
+                  style={[
+                    styles.experienceOption,
+                    isOther ? styles.otherOption : null,
+                    isSelected && styles.selectedExperience,
+                  ]}
                 >
+                  {isOther ? (
+                    <Icon.PlusIcon
+                      size={verticalScale(14)}
+                      color={theme.accent.default}
+                      weight="bold"
+                    />
+                  ) : null}
                   <Typo
-                    size={verticalScale(13)}
+                    size={13}
                     fontWeight="medium"
-                    color={isSelected ? lightTheme.background.card : lightTheme.text.primary}
+                    color={isSelected ? theme.background.card : theme.text.primary}
                   >
                     {experience.title}
                   </Typo>
@@ -280,13 +300,13 @@ export default function Log() {
         {/* Severity */}
         <View style={styles.severity}>
           <View style={styles.severityHeader}>
-            <Typo size={verticalScale(16)} fontWeight={'medium'} color={lightTheme.text.primary}>
+            <Typo size={16} fontWeight={'medium'} color={theme.text.primary}>
               Severity
             </Typo>
             <Typo
-              size={verticalScale(14)}
+              size={14}
               fontWeight="medium"
-              color={selectedSeverity.color}
+              color={theme.semantic[selectedSeverity.tone]}
               textProps={{ accessibilityLiveRegion: 'polite' }}
             >
               {selectedSeverity.value}/5 - {selectedSeverity.label}
@@ -306,15 +326,15 @@ export default function Log() {
                   style={[
                     styles.severityOption,
                     {
-                      borderColor: option.color,
-                      backgroundColor: isSelected ? option.color : lightTheme.background.card,
+                      borderColor: theme.semantic[option.tone],
+                      backgroundColor: isSelected ? theme.semantic[option.tone] : theme.background.card,
                     },
                   ]}
                 >
                   <Typo
-                    size={verticalScale(16)}
+                    size={16}
                     fontWeight="semibold"
-                    color={isSelected ? lightTheme.background.card : option.color}
+                    color={isSelected ? theme.background.card : theme.semantic[option.tone]}
                   >
                     {option.value}
                   </Typo>
@@ -323,10 +343,10 @@ export default function Log() {
             })}
           </View>
           <View style={{ justifyContent: 'space-between', flexDirection: 'row' }}>
-            <Typo color={lightTheme.text.primary} size={verticalScale(12)} fontWeight={'regular'}>
+            <Typo color={theme.text.primary} size={12} fontWeight={'regular'}>
               Minimal
             </Typo>
-            <Typo color={lightTheme.text.primary} size={verticalScale(12)} fontWeight={'regular'}>
+            <Typo color={theme.text.primary} size={12} fontWeight={'regular'}>
               Severe
             </Typo>
           </View>
@@ -335,10 +355,10 @@ export default function Log() {
         {/* note */}
         <View style={styles.note}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-            <Typo size={verticalScale(16)} fontWeight={'bold'}>
+            <Typo size={16} fontWeight={'bold'}>
               Add a note
             </Typo>
-            <Typo size={verticalScale(12)} fontWeight={'light'}>
+            <Typo size={12} fontWeight={'light'}>
               (optional)
             </Typo>
           </View>
@@ -358,7 +378,7 @@ export default function Log() {
               }}
               height={verticalScale(80)}
               width={'100%'}
-              placeholderTextColor={lightTheme.text.secondary}
+              placeholderTextColor={theme.text.secondary}
               placeholder="Describe how you are feeling in more detail..."
             ></Input>
           </View>
@@ -374,20 +394,16 @@ export default function Log() {
         >
           {visibility && (
             <View style={styles.doctorAvatar}>
-              <Typo
-                size={verticalScale(10)}
-                fontWeight="semibold"
-                color={lightTheme.secondary.dark}
-              >
+              <Typo size={10} fontWeight="semibold" color={theme.secondary.dark}>
                 {doctor.initials}
               </Typo>
             </View>
           )}
           <View style={styles.visibilityLabel}>
             <Typo
-              size={verticalScale(13)}
+              size={13}
               fontWeight="medium"
-              color={visibility ? lightTheme.text.primary : lightTheme.text.secondary}
+              color={visibility ? theme.text.primary : theme.text.secondary}
             >
               {visibility ? `Visible to ${doctor.name}` : 'Private — not shared'}
             </Typo>
@@ -417,7 +433,7 @@ export default function Log() {
         <View style={styles.modalBackdrop}>
           <View style={styles.experienceModalCard}>
             <View style={styles.modalHeader}>
-              <Typo size={verticalScale(18)} fontWeight="bold" color={lightTheme.text.primary}>
+              <Typo size={18} fontWeight="bold" color={theme.text.primary}>
                 Add an experience
               </Typo>
               <Pressable
@@ -425,19 +441,19 @@ export default function Log() {
                 hitSlop={8}
                 onPress={() => setShowExperienceModal(false)}
               >
-                <Icon.XIcon color={lightTheme.text.secondary} size={verticalScale(22)} />
+                <Icon.XIcon color={theme.text.secondary} size={verticalScale(22)} />
               </Pressable>
             </View>
             <View style={styles.searchBox}>
               <Icon.MagnifyingGlassIcon
-                color={lightTheme.text.secondary}
+                color={theme.text.secondary}
                 size={verticalScale(18)}
               />
               <TextInput
                 value={experienceSearch}
                 onChangeText={setExperienceSearch}
                 placeholder="Search experiences"
-                placeholderTextColor={lightTheme.text.secondary}
+                placeholderTextColor={theme.text.secondary}
                 style={styles.searchInput}
                 returnKeyType="done"
                 onSubmitEditing={addCustomExperience}
@@ -454,14 +470,14 @@ export default function Log() {
                     style={[styles.moreExperienceOption, isSelected && styles.selectedExperience]}
                   >
                     <Typo
-                      size={verticalScale(14)}
+                      size={14}
                       fontWeight="medium"
-                      color={isSelected ? lightTheme.background.card : lightTheme.text.primary}
+                      color={isSelected ? theme.background.card : theme.text.primary}
                     >
                       {experience.title}
                     </Typo>
                     {isSelected ? (
-                      <Icon.CheckIcon color={lightTheme.background.card} size={verticalScale(18)} />
+                      <Icon.CheckIcon color={theme.background.card} size={verticalScale(18)} />
                     ) : null}
                   </Pressable>
                 );
@@ -472,19 +488,15 @@ export default function Log() {
                   experience.title.toLowerCase() === experienceSearch.trim().toLowerCase(),
               ) ? (
                 <Pressable onPress={addCustomExperience} style={styles.moreExperienceOption}>
-                  <Typo
-                    size={verticalScale(14)}
-                    fontWeight="medium"
-                    color={lightTheme.text.primary}
-                  >
+                  <Typo size={14} fontWeight="medium" color={theme.text.primary}>
                     Add "{experienceSearch.trim()}"
                   </Typo>
-                  <Icon.PlusIcon color={lightTheme.accent.default} size={verticalScale(18)} />
+                  <Icon.PlusIcon color={theme.accent.default} size={verticalScale(18)} />
                 </Pressable>
               ) : null}
             </ScrollView>
             <Pressable onPress={() => setShowExperienceModal(false)} style={styles.modalDoneButton}>
-              <Typo size={verticalScale(15)} fontWeight="600" color="#FFFFFF">
+              <Typo size={15} fontWeight="600" color={theme.text.onAccent}>
                 Done
               </Typo>
             </Pressable>
@@ -495,7 +507,9 @@ export default function Log() {
   );
 }
 
-const styles = StyleSheet.create({
+// Built per theme so colours follow light/dark mode.
+const createStyles = (theme: Theme) =>
+  StyleSheet.create({
   top: {
     justifyContent: 'space-between',
     flexDirection: 'row',
@@ -506,7 +520,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacingX.sm,
     alignSelf: 'flex-start',
-    backgroundColor: '#F0E9E7',
+    backgroundColor: theme.background.muted,
     borderRadius: 999,
     marginVertical: spacingX.md,
     paddingHorizontal: spacingX.lg,
@@ -515,12 +529,12 @@ const styles = StyleSheet.create({
   modalBackdrop: {
     flex: 1,
     justifyContent: 'center',
-    backgroundColor: 'rgba(43, 36, 34, 0.35)',
+    backgroundColor: theme.overlay,
     paddingHorizontal: spacingX.xl,
   },
   iosPickerCard: {
     alignItems: 'center',
-    backgroundColor: lightTheme.background.card,
+    backgroundColor: theme.background.card,
     borderRadius: 16,
     padding: spacingX.lg,
   },
@@ -528,7 +542,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     alignItems: 'center',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: lightTheme.border,
+    borderTopColor: theme.border,
     marginTop: spacingY.sm,
     paddingTop: spacingY.md,
   },
@@ -542,7 +556,7 @@ const styles = StyleSheet.create({
   },
   addExperienceButton: {
     alignItems: 'center',
-    borderColor: lightTheme.accent.default,
+    borderColor: theme.accent.default,
     borderRadius: 999,
     borderWidth: 1,
     height: verticalScale(30),
@@ -551,8 +565,8 @@ const styles = StyleSheet.create({
   },
   searchBox: {
     alignItems: 'center',
-    backgroundColor: lightTheme.background.card,
-    borderColor: lightTheme.border,
+    backgroundColor: theme.background.card,
+    borderColor: theme.border,
     borderRadius: 12,
     borderWidth: 1,
     flexDirection: 'row',
@@ -560,7 +574,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingX.md,
   },
   searchInput: {
-    color: lightTheme.text.primary,
+    color: theme.text.primary,
     flex: 1,
     fontSize: verticalScale(14),
     paddingHorizontal: spacingX.sm,
@@ -573,20 +587,25 @@ const styles = StyleSheet.create({
   },
   experienceOption: {
     alignItems: 'center',
-    backgroundColor: lightTheme.background.card,
-    borderColor: lightTheme.border,
+    backgroundColor: theme.background.card,
+    borderColor: theme.border,
     borderRadius: 12,
     borderWidth: 1,
     minWidth: '31%',
     paddingHorizontal: spacingX.md,
     paddingVertical: spacingY.md,
   },
+  otherOption: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacingX.xs,
+  },
   selectedExperience: {
-    backgroundColor: lightTheme.accent.default,
-    borderColor: lightTheme.accent.default,
+    backgroundColor: theme.accent.default,
+    borderColor: theme.accent.default,
   },
   experienceModalCard: {
-    backgroundColor: lightTheme.background.app,
+    backgroundColor: theme.background.app,
     borderRadius: 20,
     maxHeight: '80%',
     padding: spacingX.lg,
@@ -602,8 +621,8 @@ const styles = StyleSheet.create({
   },
   moreExperienceOption: {
     alignItems: 'center',
-    backgroundColor: lightTheme.background.card,
-    borderColor: lightTheme.border,
+    backgroundColor: theme.background.card,
+    borderColor: theme.border,
     borderRadius: 12,
     borderWidth: 1,
     flexDirection: 'row',
@@ -613,7 +632,7 @@ const styles = StyleSheet.create({
   },
   modalDoneButton: {
     alignItems: 'center',
-    backgroundColor: lightTheme.accent.default,
+    backgroundColor: theme.accent.default,
     borderRadius: 999,
     marginTop: spacingY.md,
     paddingVertical: spacingY.md,
@@ -656,8 +675,8 @@ const styles = StyleSheet.create({
     marginTop: spacingY.md,
     paddingHorizontal: spacingX.md,
     paddingVertical: spacingY.sm,
-    backgroundColor: lightTheme.background.card,
-    borderColor: lightTheme.border,
+    backgroundColor: theme.background.card,
+    borderColor: theme.border,
     borderWidth: 1,
     borderRadius: 16,
   },
@@ -667,8 +686,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 8,
-    backgroundColor: '#E8F2E5',
-    borderColor: '#D8E8D3',
+    backgroundColor: theme.secondary.tint,
+    borderColor: theme.secondary.tintBorder,
     borderWidth: 1,
   },
   visibilityLabel: {
@@ -678,19 +697,19 @@ const styles = StyleSheet.create({
     width: 38,
     height: 22,
     borderRadius: 999,
-    backgroundColor: lightTheme.border,
+    backgroundColor: theme.border,
     padding: 2,
     justifyContent: 'center',
   },
   visibilityTrackActive: {
-    backgroundColor: lightTheme.secondary.default,
-    borderColor: lightTheme.secondary.default,
+    backgroundColor: theme.secondary.default,
+    borderColor: theme.secondary.default,
   },
   visibilityThumb: {
     width: 16,
     height: 16,
     borderRadius: 999,
-    backgroundColor: lightTheme.background.card,
+    backgroundColor: theme.background.card,
     alignSelf: 'flex-start',
   },
   visibilityThumbActive: {

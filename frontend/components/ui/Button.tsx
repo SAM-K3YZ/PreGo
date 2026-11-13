@@ -5,6 +5,7 @@ import Typo from '@/components/Typo';
 import { ButtonProps, ButtonSize } from '@/types';
 
 const PADDING_BY_SIZE: Record<ButtonSize, number> = { sm: 10, md: 14, lg: 18 };
+const PADDING_X_BY_SIZE: Record<ButtonSize, number> = { sm: 14, md: 20, lg: 24 };
 const FONT_BY_SIZE: Record<ButtonSize, number> = { sm: 13, md: 15, lg: 17 };
 
 const Button = ({
@@ -30,7 +31,7 @@ const Button = ({
     ghost: 'transparent',
   }[variant];
 
-  const textColor = color ?? (variant === 'outline' || variant === 'ghost' ? theme.accent.default : '#FFFFFF');
+  const textColor = color ?? (variant === 'outline' || variant === 'ghost' ? theme.accent.default : theme.text.onAccent);
   const borderColor = customBorderColor ?? (variant === 'outline' ? theme.accent.default : 'transparent');
 
   return (
@@ -47,7 +48,9 @@ const Button = ({
           borderWidth: variant === 'outline' ? 1 : 0,
           borderColor,
           borderRadius: scale(12),
+          minHeight: 44,
           paddingVertical: verticalScale(PADDING_BY_SIZE[size]),
+          paddingHorizontal: scale(PADDING_X_BY_SIZE[size]),
           opacity: isDisabled ? 0.5 : pressed ? 0.85 : 1,
         },
         style,

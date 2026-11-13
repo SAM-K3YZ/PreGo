@@ -1,32 +1,44 @@
-// Ported from the v1 Java HomePage.java logic (calculateDeliveryDate,
-// determineAndDisplayTrimesterStage) using date-fns instead of ThreeTenABP.
-// IMPORTANT: this client-side calculation is for display only. The backend
-// recomputes the same values server-side (see backend/src/utils/trimesterCalc.ts)
-// so nothing shown to a doctor is ever trusted from the client alone.
+// Gestational age is counted from the LMP, ~14 days before conception (ACOG convention).
 
-import { differenceInCalendarDays, addWeeks, isBefore } from 'date-fns';
+import { addDays, differenceInCalendarDays, isValid, parse, startOfDay } from 'date-fns';
+import type { Gestation, Trimester } from '@/types';
 
-export type Trimester = 'First' | 'Second' | 'Third';
+const LMP_TO_CONCEPTION_DAYS = 14;
+const CONCEPTION_TO_DUE_DAYS = 266;      // 38 weeks
+const MAX_PLAUSIBLE_GESTATION_DAYS = 44 * 7;
 
-export function calculateDeliveryDate(conceptionDate: string | Date): Date {
-  return addWeeks(new Date(conceptionDate), 38);
+/** Date-only strings ('YYYY-MM-DD' or an ISO datetime) are read as LOCAL calendar days. */
+export function parseCalendarDate(input: string | Date): Date | null {
+  if (input instanceof Date) return isValid(input) ? startOfDay(input) : null;
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(input);
+  if (!match) return null;
+  const parsed = parse(match[1], 'yyyy-MM-dd', new Date());
+  return isValid(parsed) ? parsed : null;
 }
 
-export function getCountdown(estimatedDeliveryDate: Date): { days: number; passed: boolean } {
-  const today = new Date();
-  if (isBefore(today, estimatedDeliveryDate)) {
-    const days = differenceInCalendarDays(estimatedDeliveryDate, today);
-    return { days, passed: false };
-  }
-  return { days: 0, passed: true };
-}
+/** Returns null for missing, malformed, future or implausible dates. Never guesses. */
+export function getGestation(conceptionDate: string | Date, now: Date = new Date()): Gestation | null {
+  const conception = parseCalendarDate(conceptionDate);
+  if (!conception) return null;
 
-export function getTrimester(conceptionDate: string | Date): Trimester {
-  const weeksSinceConception = Math.floor(
-    differenceInCalendarDays(new Date(), new Date(conceptionDate)) / 7,
-  );
+  const today = startOfDay(now);
+  const daysSinceConception = differenceInCalendarDays(today, conception);
+  const gestationalDays = daysSinceConception + LMP_TO_CONCEPTION_DAYS;
+  if (daysSinceConception < 0 || gestationalDays > MAX_PLAUSIBLE_GESTATION_DAYS) return null;
 
-  if (weeksSinceConception <= 12) return 'First';
-  if (weeksSinceConception <= 27) return 'Second';
-  return 'Third';
+  const weeks = Math.floor(gestationalDays / 7);
+  const trimester: Trimester = weeks < 14 ? 'First' : weeks < 28 ? 'Second' : 'Third';
+
+  const dueDate = addDays(conception, CONCEPTION_TO_DUE_DAYS);
+  const daysToGo = differenceInCalendarDays(dueDate, today);
+
+  return {
+    weeks,
+    days: gestationalDays % 7,
+    trimester,
+    dueDate,
+    daysToGo,
+    status: daysToGo > 0 ? 'ongoing' : daysToGo === 0 ? 'due-today' : 'overdue',
+    postTerm: weeks >= 42,
+  };
 }

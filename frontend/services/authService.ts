@@ -1,30 +1,18 @@
-import apiClient from './apiClient';
-import * as SecureStore from 'expo-secure-store';
+import apiClient from '@/services/apiClient';
+import { z } from 'zod';
+import { tokenStore } from '@/services/tokenStore';
+import { queryClient } from '@/services/queryClient';
+import type { AuthUser, SignInPayload, SignUpPayload, VerifyOtpPayload } from '@/types';
 
-export type UserRole = 'patient' | 'doctor' | 'hospital_admin' | 'platform_admin';
-
-export interface AuthUser {
-  id: string;
-  email: string;
-  role: UserRole;
-}
-
-interface SignUpPayload {
-  email: string;
-  password: string;
-  role: 'patient' | 'doctor';
-  fullName: string;
-  phone: string;
-  // Doctor-only verification details.
-  licenseNumber?: string;
-  specialty?: string;
-  hospitalName?: string;
-}
-
-interface SignInPayload {
-  email: string;
-  password: string;
-}
+const SignInResponse = z.object({
+  accessToken: z.string().min(1),
+  refreshToken: z.string().min(1),
+  user: z.object({
+    id: z.string(),
+    email: z.string(),
+    role: z.enum(['patient', 'doctor', 'hospital_admin', 'platform_admin']),
+  }),
+});
 
 export const authService = {
   async signUp(payload: SignUpPayload) {
@@ -32,27 +20,29 @@ export const authService = {
     return data;
   },
 
-  async verifyOtp(payload: { email: string; otp: string }) {
+  async verifyOtp(payload: VerifyOtpPayload) {
     const { data } = await apiClient.post('/auth/verify-otp', payload);
     return data;
   },
 
   async signIn({ email, password }: SignInPayload): Promise<AuthUser> {
     const { data } = await apiClient.post('/auth/login', { email, password });
-    await SecureStore.setItemAsync('accessToken', data.accessToken);
-    await SecureStore.setItemAsync('refreshToken', data.refreshToken);
-    return data.user;
+    const parsed = SignInResponse.parse(data);
+    await tokenStore.setUser(parsed.user);
+    await tokenStore.set(parsed.accessToken, parsed.refreshToken);
+    return parsed.user;
   },
 
   async signOut(): Promise<void> {
     try {
-      const refreshToken = await SecureStore.getItemAsync('refreshToken');
-      await apiClient.post('/auth/logout', { refreshToken });
+      const refreshToken = await tokenStore.getRefresh();
+      if (refreshToken) await apiClient.post('/auth/logout', { refreshToken }, { timeout: 5000 });
+    } catch {
+      // Offline, expired or already revoked: still sign out locally, so the
+      // device is never "stuck" logged in.
     } finally {
-      // Always clear local tokens even if the server call fails —
-      // the device should never be "stuck" logged in.
-      await SecureStore.deleteItemAsync('accessToken');
-      await SecureStore.deleteItemAsync('refreshToken');
+      await tokenStore.clear();
+      queryClient.clear(); // drop cached health data
     }
   },
 

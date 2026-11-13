@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { Alert, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeftIcon, EnvelopeIcon } from 'phosphor-react-native';
+import * as Icon from 'phosphor-react-native';
 import { Screen, Input, Button } from '@/components/ui';
 import Typo from '@/components/Typo';
+import { useTheme } from '@/hooks/useTheme';
 import AuthHeader from '@/components/AuthHeader';
-import { lightTheme, spacingY, radius } from '@/constants/theme';
+import { spacingY, radius } from '@/constants/theme';
 import { scale } from '@/utils/styling';
 import { authService } from '@/services/authService';
-import { getEmailError } from '@/utils/validation';
-import { getApiErrorMessage } from '@/utils/apiError';
+import { getEmailError, normalizeEmail } from '@/utils/validation';
+import { getApiErrorMessage } from '@/services/apiError';
 
 export default function ForgotPassword() {
+  const theme = useTheme();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [emailTouched, setEmailTouched] = useState(false);
@@ -25,7 +27,7 @@ export default function ForgotPassword() {
 
     setIsSubmitting(true);
     try {
-      await authService.forgotPassword(email);
+      await authService.forgotPassword(normalizeEmail(email));
       Alert.alert(
         'Check your email',
         'If an account exists for that email, a reset link is on its way.',
@@ -45,22 +47,22 @@ export default function ForgotPassword() {
         hitSlop={8}
         style={{ alignSelf: 'flex-start', marginBottom: spacingY.md }}
       >
-        <ArrowLeftIcon size={scale(22)} color={lightTheme.text.primary} />
+        <Icon.ArrowLeftIcon size={scale(22)} color={theme.text.primary} />
       </Pressable>
 
       <AuthHeader />
 
-      <Typo size={24} color={lightTheme.text.primary} fontWeight="bold" style={{ marginBottom: 4 }}>
+      <Typo size={24} color={theme.text.primary} fontWeight="bold" style={{ marginBottom: 4 }}>
         Reset your password
       </Typo>
-      <Typo size={14} color={lightTheme.text.secondary} style={{ marginBottom: spacingY.xl }}>
+      <Typo size={14} color={theme.text.secondary} style={{ marginBottom: spacingY.xl }}>
         Enter the email on your account and we&apos;ll send you a link to reset your password.
       </Typo>
 
       <Input
         label="Email address"
         placeholder="adaeze@email.com"
-        leftIcon={EnvelopeIcon}
+        leftIcon={Icon.EnvelopeIcon}
         keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}

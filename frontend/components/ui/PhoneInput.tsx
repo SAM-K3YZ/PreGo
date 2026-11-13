@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, TextInput, View } from 'react-native';
-import { CaretDownIcon, MagnifyingGlassIcon, XIcon } from 'phosphor-react-native';
+import * as Icon from 'phosphor-react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { scale, verticalScale } from '@/utils/styling';
 import Typo from '@/components/Typo';
-import { countries, Country } from '@/constants/countries';
-import { PhoneInputProps } from '@/types';
+import { countries } from '@/constants/countries';
+import type { PhoneInputProps, Country } from '@/types';
 
 const PhoneInput = ({
   label,
@@ -14,6 +14,7 @@ const PhoneInput = ({
   onChangeText,
   country,
   onCountryChange,
+  onBlur,
   helperText,
   errorText,
   containerStyle,
@@ -81,7 +82,7 @@ const PhoneInput = ({
           <Typo size={15} color={theme.text.primary}>
             {country.dialCode}
           </Typo>
-          <CaretDownIcon size={scale(14)} color={theme.text.secondary} />
+          <Icon.CaretDownIcon size={scale(14)} color={theme.text.secondary} />
         </Pressable>
 
         <View
@@ -102,7 +103,10 @@ const PhoneInput = ({
           autoComplete="tel"
           textContentType="telephoneNumber"
           onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
+          onBlur={() => {
+            setIsFocused(false);
+            onBlur?.();
+          }}
           style={{
             flex: 1,
             paddingVertical: verticalScale(14),
@@ -130,7 +134,7 @@ const PhoneInput = ({
         onRequestClose={() => setIsPickerOpen(false)}
       >
         <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}
+          style={{ flex: 1, backgroundColor: theme.overlay, justifyContent: 'flex-end' }}
           onPress={() => setIsPickerOpen(false)}
         >
           <Pressable
@@ -155,7 +159,7 @@ const PhoneInput = ({
                 Select a country
               </Typo>
               <Pressable onPress={() => setIsPickerOpen(false)} hitSlop={8}>
-                <XIcon size={scale(20)} color={theme.text.secondary} />
+                <Icon.XIcon size={scale(20)} color={theme.text.secondary} />
               </Pressable>
             </View>
 
@@ -170,7 +174,7 @@ const PhoneInput = ({
                 marginBottom: verticalScale(12),
               }}
             >
-              <MagnifyingGlassIcon size={scale(16)} color={theme.text.secondary} />
+              <Icon.MagnifyingGlassIcon size={scale(16)} color={theme.text.secondary} />
               <TextInput
                 value={search}
                 onChangeText={setSearch}

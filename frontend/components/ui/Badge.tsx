@@ -8,7 +8,7 @@ const Badge = ({ label, variant = 'neutral', style }: BadgeProps) => {
   const theme = useTheme();
 
   const color = variant === 'neutral' ? theme.text.secondary : theme.semantic[variant];
-  const backgroundColor = variant === 'neutral' ? theme.border : `${color}22`;
+  const backgroundColor = variant === 'neutral' ? theme.border : theme.semanticSoft[variant];
 
   return (
     <View

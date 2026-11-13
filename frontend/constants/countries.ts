@@ -1,9 +1,4 @@
-export interface Country {
-  name: string;
-  iso2: string;
-  dialCode: string;
-  flag: string;
-}
+import type { Country } from '@/types';
 
 // All UN member states plus a few widely-recognized territories (Taiwan,
 // Palestine, Kosovo, Vatican City), sorted alphabetically by name.

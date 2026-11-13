@@ -1,24 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, ActivityIndicator, Image } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
-import {
-  HeartIcon,
-  SparkleIcon,
-  FlowerLotusIcon,
-  StarIcon,
-  FlowerTulipIcon,
-  HeartStraightIcon,
-} from 'phosphor-react-native';
+import * as Icon from 'phosphor-react-native';
 import Typo from '@/components/Typo';
+import { useTheme } from '@/hooks/useTheme';
 import { Screen } from '@/components/ui';
-import { lightTheme, spacingY } from '@/constants/theme';
+import { spacingY } from '@/constants/theme';
 import { scale } from '@/utils/styling';
 import { useAuthStore } from '@/store/useAuthStore';
+import { isOnboardingCompleted } from '@/services/onboardingFlag';
 
 // Shown for a brief moment on cold start while useAuthStore.hydrate() runs.
-
-const HAS_LAUNCHED_KEY = 'hasLaunchedBefore';
+// Routes: signed in → home; onboarding not finished → onboarding; otherwise → sign-in.
+// The onboarding flag is written by the onboarding screen, never here.
 
 const usePulse = (duration: number) => {
   const value = useRef(new Animated.Value(1)).current;
@@ -75,12 +69,9 @@ const useBounce = (delay: number, distance: number, duration: number) => {
   return value.interpolate({ inputRange: [0, 1], outputRange: [0, -distance] });
 };
 
-// Positions are percentages of the screen so the scatter holds up across
-// device sizes. Each icon gets its own delay/duration so they drift out of
-// sync instead of bobbing in unison.
 const SCATTERED_ICONS = [
   {
-    Icon: SparkleIcon,
+    IconComponent: Icon.SparkleIcon,
     top: '10%',
     left: '12%',
     size: 22,
@@ -90,7 +81,7 @@ const SCATTERED_ICONS = [
     distance: 10,
   },
   {
-    Icon: HeartIcon,
+    IconComponent: Icon.HeartIcon,
     top: '10%',
     left: '90%',
     size: 20,
@@ -100,7 +91,7 @@ const SCATTERED_ICONS = [
     distance: 8,
   },
   {
-    Icon: FlowerLotusIcon,
+    IconComponent: Icon.FlowerLotusIcon,
     top: '32%',
     left: '50%',
     size: 24,
@@ -110,7 +101,7 @@ const SCATTERED_ICONS = [
     distance: 12,
   },
   {
-    Icon: StarIcon,
+    IconComponent: Icon.StarIcon,
     top: '100%',
     left: '88%',
     size: 18,
@@ -120,7 +111,7 @@ const SCATTERED_ICONS = [
     distance: 9,
   },
   {
-    Icon: HeartStraightIcon,
+    IconComponent: Icon.HeartStraightIcon,
     top: '85%',
     left: '50%',
     size: 20,
@@ -130,7 +121,7 @@ const SCATTERED_ICONS = [
     distance: 10,
   },
   {
-    Icon: FlowerTulipIcon,
+    IconComponent: Icon.FlowerTulipIcon,
     top: '86%',
     left: '10%',
     size: 22,
@@ -140,7 +131,7 @@ const SCATTERED_ICONS = [
     distance: 11,
   },
   {
-    Icon: SparkleIcon,
+    IconComponent: Icon.SparkleIcon,
     top: '46%',
     left: '6%',
     size: 16,
@@ -150,7 +141,7 @@ const SCATTERED_ICONS = [
     distance: 7,
   },
   {
-    Icon: HeartIcon,
+    IconComponent: Icon.HeartIcon,
     top: '65%',
     left: '90%',
     size: 16,
@@ -162,7 +153,7 @@ const SCATTERED_ICONS = [
 ] as const;
 
 const ScatteredIcon = ({
-  Icon,
+  IconComponent,
   top,
   left,
   size,
@@ -183,12 +174,13 @@ const ScatteredIcon = ({
         transform: [{ translateY }],
       }}
     >
-      <Icon size={scale(size)} color={color} weight={weight} />
+      <IconComponent size={scale(size)} color={color} weight={weight} />
     </Animated.View>
   );
 };
 
 export default function Splash() {
+  const theme = useTheme();
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuthStore();
   const [minDelayElapsed, setMinDelayElapsed] = useState(false);
@@ -215,18 +207,16 @@ export default function Splash() {
     }
 
     (async () => {
-      const hasLaunchedBefore = await SecureStore.getItemAsync(HAS_LAUNCHED_KEY);
+      const onboardingCompleted = await isOnboardingCompleted();
       if (hasNavigated.current) return;
       hasNavigated.current = true;
 
-      if (!hasLaunchedBefore) {
-        // First launch ever, or a fresh install after an uninstall (which
-        // wipes SecureStore) — go straight to account creation.
-        await SecureStore.setItemAsync(HAS_LAUNCHED_KEY, 'true');
-        router.replace('/(auth)/sign-up');
+      if (!onboardingCompleted) {
+        // Fresh install, or onboarding quit before the last slide.
+        router.replace('/(onboarding)/onboarding');
       } else {
-        // Returning device, logged out — let them choose sign in vs sign up.
-        router.replace('/(auth)/welcome');
+        // Seen onboarding before, signed out: sign-in links to sign-up if needed.
+        router.replace('/(auth)/sign-in');
       }
     })();
   }, [minDelayElapsed, isLoading, isAuthenticated, router]);
@@ -237,7 +227,7 @@ export default function Splash() {
         <ScatteredIcon
           key={`${icon.top}-${icon.left}-${index}`}
           {...icon}
-          color={index % 2 === 0 ? lightTheme.accent.tint : lightTheme.secondary.default}
+          color={index % 2 === 0 ? theme.accent.tint : theme.secondary.default}
         />
       ))}
 
@@ -250,12 +240,12 @@ export default function Splash() {
       </Animated.View>
 
       <Animated.View style={{ transform: [{ scale: textScale }], marginTop: spacingY.md }}>
-        <Typo color={lightTheme.accent.default} size={40} fontWeight="bold">
+        <Typo color={theme.accent.default} size={40} fontWeight="bold">
           Prego
         </Typo>
       </Animated.View>
 
-      <ActivityIndicator style={{ marginTop: spacingY.xxl }} color={lightTheme.accent.default} />
+      <ActivityIndicator style={{ marginTop: spacingY.xxl }} color={theme.accent.default} />
     </Screen>
   );
 }

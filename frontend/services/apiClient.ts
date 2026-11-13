@@ -1,98 +1,108 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import Constants from 'expo-constants';
-import * as SecureStore from 'expo-secure-store';
+import * as Crypto from 'expo-crypto';
+import { z } from 'zod';
+import { API_URL } from '@/config/env';
+import { tokenStore } from '@/services/tokenStore';
+import { SessionExpiredError, toApiError } from '@/services/apiError';
+import type { RetriableConfig } from '@/types';
 
-// This is the ONLY axios instance in the app. Every service file (authService,
-// logService, doctorService, etc.) imports and uses THIS client — never call
-// axios/fetch directly from a screen or component.
-
-const apiUrl = (Constants.expoConfig?.extra as { apiUrl: string })?.apiUrl;
-
-// Passwords, tokens, and health data all travel over this client — plain
-// HTTP outside of local dev means they'd go over the wire unencrypted.
-if (!__DEV__ && !apiUrl?.startsWith('https://')) {
-  console.warn(
-    `[apiClient] API_URL ("${apiUrl}") is not HTTPS in a production build. ` +
-      'Set API_URL to an https:// endpoint before shipping.',
-  );
-}
-
+// The ONLY app-facing axios instance. Screens never call axios/fetch directly.
 const apiClient = axios.create({
-  baseURL: apiUrl,
+  baseURL: API_URL,
   timeout: 15000,
+  headers: { 'X-App-Version': Constants.expoConfig?.version ?? 'unknown' },
 });
 
-interface RetriableConfig extends InternalAxiosRequestConfig {
-  _retry?: boolean;
-}
+// Separate, interceptor-free client for the refresh call, with its own timeout.
+const refreshClient = axios.create({ baseURL: API_URL, timeout: 10000 });
 
-// Attach the access token to every outgoing request.
+const RefreshResponse = z.object({ accessToken: z.string().min(1), refreshToken: z.string().min(1).optional() });
+
+// A 401 from these means "bad credentials", not "expired session". Never refresh for them.
+const AUTH_PATHS = ['/auth/login', '/auth/signup', '/auth/register', '/auth/refresh', '/auth/logout', '/auth/verify-otp', '/auth/forgot-password'];
+const isAuthPath = (url?: string) => !!url && AUTH_PATHS.some((p) => url.startsWith(p));
+
+// Only ever attach the token to our own API.
+const isAbsolute = (url?: string) => !!url && /^([a-z][a-z\d+\-.]*:)?\/\//i.test(url);
+const targetsApi = (url?: string) => !isAbsolute(url) || (url as string).startsWith(`${API_URL}/`);
+
+// Registered once by the root layout (avoids an import cycle with the auth store).
+let onSessionExpired: () => void = () => {};
+export const setSessionExpiredHandler = (handler: () => void) => {
+  onSessionExpired = handler;
+};
+
 apiClient.interceptors.request.use(async (config) => {
-  const token = await SecureStore.getItemAsync('accessToken');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  config.headers.set('X-Request-Id', Crypto.randomUUID()); // support can trace a user's failure
+  if (targetsApi(config.url)) {
+    const token = await tokenStore.getAccess();
+    if (token) config.headers.set('Authorization', `Bearer ${token}`);
   }
   return config;
 });
 
-// If a request comes back 401, try ONE silent refresh, then retry the request.
-// If the refresh itself fails, clear tokens and let the auth store redirect to sign-in.
-let isRefreshing = false;
-let pendingQueue: { resolve: (token: string) => void; reject: (err: unknown) => void }[] = [];
+// ── single-flight refresh ────────────────────────────────────────────────
+let refreshInFlight: Promise<string> | null = null;
 
-const processQueue = (error: unknown, token: string | null = null) => {
-  pendingQueue.forEach((p) => (error ? p.reject(error) : p.resolve(token as string)));
-  pendingQueue = [];
-};
+async function refreshAccessToken(): Promise<string> {
+  const refreshToken = await tokenStore.getRefresh();
+  if (!refreshToken) throw new SessionExpiredError();
+  try {
+    const { data } = await refreshClient.post('/auth/refresh', { refreshToken });
+    const parsed = RefreshResponse.parse(data);
+    await tokenStore.set(parsed.accessToken, parsed.refreshToken ?? refreshToken);
+    return parsed.accessToken;
+  } catch (err) {
+    const status = (err as AxiosError).response?.status;
+    if (status === 400 || status === 401 || status === 403) {
+      await tokenStore.clear(); // the server says this session is dead
+      throw new SessionExpiredError();
+    }
+    throw err; // offline / timeout / 5xx: keep the session and let the caller retry later
+  }
+}
+
+function getFreshToken(): Promise<string> {
+  if (!refreshInFlight) {
+    refreshInFlight = refreshAccessToken().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
+async function getValidToken(usedToken: string | null): Promise<string> {
+  const current = await tokenStore.getAccess();
+  if (current && current !== usedToken) return current; // another request already refreshed
+  return getFreshToken();
+}
+
+const bearerOf = (cfg: InternalAxiosRequestConfig) =>
+  String(cfg.headers.get('Authorization') ?? '').replace(/^Bearer /, '') || null;
 
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const originalRequest = error.config as RetriableConfig;
+    const original = error.config as RetriableConfig | undefined;
 
-    if (error.response?.status !== 401 || originalRequest._retry) {
-      return Promise.reject(error);
+    if (!original || error.response?.status !== 401 || original._retry || isAuthPath(original.url)) {
+      throw toApiError(error);
     }
 
-    if (isRefreshing) {
-      return new Promise<string>((resolve, reject) => {
-        pendingQueue.push({ resolve, reject });
-      })
-        .then((token) => {
-          originalRequest.headers.Authorization = `Bearer ${token}`;
-          return apiClient(originalRequest);
-        })
-        .catch((err) => Promise.reject(err));
-    }
-
-    originalRequest._retry = true;
-    isRefreshing = true;
+    original._retry = true; // set for every waiter, not just the first
 
     try {
-      const refreshToken = await SecureStore.getItemAsync('refreshToken');
-      if (!refreshToken) {
-        throw new Error('No refresh token available. Please sign in again.');
+      await getValidToken(bearerOf(original));
+    } catch (e) {
+      if (e instanceof SessionExpiredError) {
+        onSessionExpired();
+        throw e;
       }
-
-      const { data } = await axios.post(
-        `${(Constants.expoConfig?.extra as { apiUrl: string })?.apiUrl}/auth/refresh`,
-        { refreshToken },
-      );
-
-      await SecureStore.setItemAsync('accessToken', data.accessToken);
-      await SecureStore.setItemAsync('refreshToken', data.refreshToken ?? refreshToken);
-
-      processQueue(null, data.accessToken);
-      originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
-      return apiClient(originalRequest);
-    } catch (refreshError) {
-      processQueue(refreshError, null);
-      await SecureStore.deleteItemAsync('accessToken');
-      await SecureStore.deleteItemAsync('refreshToken');
-      return Promise.reject(refreshError);
-    } finally {
-      isRefreshing = false;
+      throw toApiError(e);
     }
+
+    return apiClient(original); // the request interceptor attaches the fresh token
   },
 );
 

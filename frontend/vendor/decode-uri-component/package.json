@@ -1,0 +1,7 @@
+{
+  "name": "decode-uri-component",
+  "version": "0.2.3-prego",
+  "description": "Linear-time stand-in for decode-uri-component@0.2.2 (DoS advisory). Remove once expo-router no longer depends on query-string@7.",
+  "main": "index.js",
+  "license": "MIT"
+}

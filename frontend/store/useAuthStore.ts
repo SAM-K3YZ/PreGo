@@ -1,15 +1,12 @@
 import { create } from 'zustand';
-import * as SecureStore from 'expo-secure-store';
-import { authService, AuthUser } from '../services/authService';
+import Storage from 'expo-sqlite/kv-store';
+import { authService } from '@/services/authService';
+import { tokenStore } from '@/services/tokenStore';
+import { useAppLockStore } from '@/store/useAppLockStore';
+import type { AuthState } from '@/types';
 
-interface AuthState {
-  user: AuthUser | null;
-  isLoading: boolean;
-  isAuthenticated: boolean;
-  hydrate: () => Promise<void>;
-  signIn: (email: string, password: string) => Promise<AuthUser>;
-  signOut: () => Promise<void>;
-}
+// Lives in app storage (wiped on uninstall), unlike the Keychain.
+const INSTALLED_FLAG = 'prego.installed';
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
@@ -18,8 +15,26 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   async hydrate() {
     // Called once from the root layout on app boot.
-    const token = await SecureStore.getItemAsync('accessToken');
-    set({ isAuthenticated: !!token, isLoading: false });
+    try {
+      // First launch after install: iOS Keychain can outlive an uninstall, so
+      // drop any tokens left over from a previous install.
+      if (!(await Storage.getItem(INSTALLED_FLAG))) {
+        await tokenStore.clear();
+        await Storage.setItem(INSTALLED_FLAG, '1');
+      }
+      const [token, user] = await Promise.all([tokenStore.getAccess(), tokenStore.getUser()]);
+      if (token && !user) {
+        // Session from before the user was stored: sign in again so cached data
+        // can be scoped to a known account.
+        await tokenStore.clear();
+      }
+      const isAuthenticated = !!token && !!user;
+      set({ user: isAuthenticated ? user : null, isAuthenticated, isLoading: false });
+    } catch {
+      // Storage unavailable: show the signed-out flow rather than a blank app.
+      // Tokens are left in place, so the next launch can still restore the session.
+      set({ user: null, isAuthenticated: false, isLoading: false });
+    }
   },
 
   async signIn(email, password) {
@@ -30,6 +45,13 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   async signOut() {
     await authService.signOut();
+    await useAppLockStore.getState().reset().catch(() => {});
+    set({ user: null, isAuthenticated: false });
+  },
+
+  // Tokens are already cleared by the time this runs.
+  clearSession() {
+    useAppLockStore.getState().reset().catch(() => {});
     set({ user: null, isAuthenticated: false });
   },
 }));

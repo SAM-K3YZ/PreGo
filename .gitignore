@@ -29,3 +29,5 @@ yarn-error.log*
 # Private developer notes
 DEV_NOTES.md
 **/DEV_NOTES.md
+# Private local documentation (never commit)
+_private-docs/

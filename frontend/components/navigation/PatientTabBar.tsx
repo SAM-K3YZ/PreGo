@@ -1,71 +1,97 @@
 import Typo from '@/components/Typo';
-import { lightTheme } from '@/constants/theme';
-import { Tabs } from 'expo-router';
-import { ComponentProps, useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
+import { useTheme } from '@/hooks/useTheme';
+import { useEffect, useMemo, useState } from 'react';
+import { Keyboard, Platform, Pressable, StyleSheet, View } from 'react-native';
+import Animated, {
+  Easing,
+  interpolate,
+  interpolateColor,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  TAB_BAR_BOTTOM_GAP,
+  TAB_BAR_HEIGHT,
+  TAB_BAR_MAX_WIDTH,
+  TAB_BAR_SIDE_MARGIN,
+  TAB_MIN_TOUCH,
+} from './tabBarMetrics';
+import type { TabBarProps, TabItemProps } from '@/types';
 
-type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
-type TabItemProps = {
-  focused: boolean;
-  label: string;
-  options: TabBarProps['descriptors'][string]['options'];
-  onPress: () => void;
-  onLongPress: () => void;
-};
+function useKeyboardVisible() {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const ios = Platform.OS === 'ios';
+    const show = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', () =>
+      setVisible(true),
+    );
+    const hide = Keyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', () =>
+      setVisible(false),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  return visible;
+}
 
 function TabItem({ focused, label, options, onPress, onLongPress }: TabItemProps) {
-  const progress = useRef(new Animated.Value(focused ? 1 : 0)).current;
+  const theme = useTheme();
+  const reduceMotion = useReducedMotion();
+  const progress = useSharedValue(focused ? 1 : 0);
 
   useEffect(() => {
-    const animation = Animated.timing(progress, {
-      toValue: focused ? 1 : 0,
-      duration: 240,
+    progress.value = withTiming(focused ? 1 : 0, {
+      duration: reduceMotion ? 0 : 240,
       easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
     });
-    animation.start();
-    return () => animation.stop();
-  }, [focused, progress]);
+  }, [focused, reduceMotion, progress]);
+
+  const wrapperStyle = useAnimatedStyle(() => ({
+    flex: interpolate(progress.value, [0, 1], [1, 2.5]),
+  }));
+  const pillStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(
+      progress.value,
+      [0, 1],
+      [theme.background.card, theme.accent.tint],
+    ),
+  }));
+  const labelStyle = useAnimatedStyle(() => ({
+    maxWidth: interpolate(progress.value, [0, 1], [0, 72]),
+    marginLeft: interpolate(progress.value, [0, 1], [0, 6]),
+    opacity: progress.value,
+  }));
 
   return (
-    <Animated.View
-      style={{ flex: progress.interpolate({ inputRange: [0, 1], outputRange: [1, 2.5] }) }}
-    >
+    <Animated.View style={[{ minWidth: TAB_MIN_TOUCH }, wrapperStyle]}>
       <Pressable
         accessibilityRole="tab"
         accessibilityState={{ selected: focused }}
         accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
+        testID={options.tabBarButtonTestID}
         onPress={onPress}
         onLongPress={onLongPress}
         style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
       >
-        <Animated.View
-          style={[
-            styles.item,
-            {
-              backgroundColor: progress.interpolate({
-                inputRange: [0, 1],
-                outputRange: [lightTheme.background.card, lightTheme.accent.tint],
-              }),
-            },
-          ]}
-        >
+        <Animated.View style={[styles.item, pillStyle]}>
           {options.tabBarIcon?.({
             focused,
-            color: focused ? lightTheme.text.primary : lightTheme.secondary.dark,
+            color: focused ? theme.text.primary : theme.secondary.dark,
             size: 22,
           })}
-          <Animated.View
-            style={{
-              maxWidth: progress.interpolate({ inputRange: [0, 1], outputRange: [0, 72] }),
-              marginLeft: progress.interpolate({ inputRange: [0, 1], outputRange: [0, 6] }),
-              opacity: progress,
-              overflow: 'hidden',
-              flexShrink: 1,
-            }}
-          >
-            <Typo size={12} fontWeight="semibold" numberOfLines={1}>
+          <Animated.View style={[styles.labelWrap, labelStyle]}>
+            <Typo
+              size={12}
+              fontWeight="semibold"
+              color={theme.text.primary}
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.2}
+            >
               {label}
             </Typo>
           </Animated.View>
@@ -76,53 +102,78 @@ function TabItem({ focused, label, options, onPress, onLongPress }: TabItemProps
 }
 
 export default function PatientTabBar({ state, descriptors, navigation }: TabBarProps) {
+  const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const keyboardVisible = useKeyboardVisible();
+  const barStyle = useMemo(
+    () => ({
+      backgroundColor: theme.background.card,
+      shadowColor: theme.text.primary,
+    }),
+    [theme],
+  );
+
+  // Hide while typing so the bar never covers inputs (Doctors search, log forms).
+  if (keyboardVisible) return null;
+
+  const activeKey = state.routes[state.index].key;
+  // Respect href: null (hidden routes), like the default bar does.
+  const routes = state.routes.filter(
+    (route) => (descriptors[route.key].options as { href?: string | null }).href !== null,
+  );
 
   return (
     <View
+      pointerEvents="box-none"
       style={[
-        styles.bar,
-        { left: insets.left + 20, right: insets.right + 20, bottom: insets.bottom + 4 },
+        styles.anchor,
+        {
+          left: insets.left + TAB_BAR_SIDE_MARGIN,
+          right: insets.right + TAB_BAR_SIDE_MARGIN,
+          bottom: insets.bottom + TAB_BAR_BOTTOM_GAP,
+        },
       ]}
     >
-      {state.routes.map((route, index) => {
-        const { options } = descriptors[route.key];
-        const focused = state.index === index;
-
-        return (
-          <TabItem
-            key={route.key}
-            focused={focused}
-            label={options.title ?? route.name}
-            options={options}
-            onPress={() => {
-              const event = navigation.emit({
-                type: 'tabPress',
-                target: route.key,
-                canPreventDefault: true,
-              });
-              if (!focused && !event.defaultPrevented)
-                navigation.navigate(route.name, route.params);
-            }}
-            onLongPress={() => navigation.emit({ type: 'tabLongPress', target: route.key })}
-          />
-        );
-      })}
+      <View accessibilityRole="tablist" style={[styles.bar, barStyle]}>
+        {routes.map((route) => {
+          const { options } = descriptors[route.key];
+          const focused = route.key === activeKey;
+          return (
+            <TabItem
+              key={route.key}
+              focused={focused}
+              label={options.title ?? route.name}
+              options={options}
+              onPress={() => {
+                const event = navigation.emit({
+                  type: 'tabPress',
+                  target: route.key,
+                  canPreventDefault: true,
+                });
+                if (!focused && !event.defaultPrevented) {
+                  navigation.navigate(route.name, route.params);
+                }
+              }}
+              onLongPress={() => navigation.emit({ type: 'tabLongPress', target: route.key })}
+            />
+          );
+        })}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  anchor: { position: 'absolute', alignItems: 'center' },
   bar: {
-    position: 'absolute',
+    width: '100%',
+    maxWidth: TAB_BAR_MAX_WIDTH,
     flexDirection: 'row',
     alignItems: 'center',
-    height: 72,
+    height: TAB_BAR_HEIGHT,
     padding: 10,
     gap: 2,
-    borderRadius: 36,
-    backgroundColor: lightTheme.background.card,
-    shadowColor: lightTheme.text.primary,
+    borderRadius: TAB_BAR_HEIGHT / 2,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
     shadowRadius: 12,
@@ -137,4 +188,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     overflow: 'hidden',
   },
+  labelWrap: { overflow: 'hidden', flexShrink: 1 },
 });

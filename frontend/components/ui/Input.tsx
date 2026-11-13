@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, TextInput, Pressable } from 'react-native';
-import { EyeIcon, EyeSlashIcon, MagnifyingGlassIcon, XCircleIcon } from 'phosphor-react-native';
+import * as Icon from 'phosphor-react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { scale, verticalScale } from '@/utils/styling';
 import Typo from '@/components/Typo';
@@ -34,7 +34,7 @@ const Input = ({
   const [isSecureVisible, setIsSecureVisible] = useState(false);
 
   const isSearch = variant === 'search';
-  const LeftIcon = leftIcon ?? (isSearch ? MagnifyingGlassIcon : undefined);
+  const LeftIcon = leftIcon ?? (isSearch ? Icon.MagnifyingGlassIcon : undefined);
   const RightIcon = rightIcon;
   const showClear = (clearable ?? isSearch) && !!value;
 
@@ -111,14 +111,14 @@ const Input = ({
             style={{ marginLeft: scale(8) }}
           >
             {isSecureVisible ? (
-              <EyeSlashIcon size={scale(18)} color={theme.text.secondary} />
+              <Icon.EyeSlashIcon size={scale(18)} color={theme.text.secondary} />
             ) : (
-              <EyeIcon size={scale(18)} color={theme.text.secondary} />
+              <Icon.EyeIcon size={scale(18)} color={theme.text.secondary} />
             )}
           </Pressable>
         ) : showClear ? (
           <Pressable onPress={onClear} hitSlop={8} style={{ marginLeft: scale(8) }}>
-            <XCircleIcon size={scale(18)} color={theme.text.secondary} weight="fill" />
+            <Icon.XCircleIcon size={scale(18)} color={theme.text.secondary} weight="fill" />
           </Pressable>
         ) : RightIcon ? (
           <Pressable

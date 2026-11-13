@@ -1,23 +1,26 @@
-import { useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Alert, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { EnvelopeIcon } from 'phosphor-react-native';
-import { useAuthStore } from '../../store/useAuthStore';
+import * as Icon from 'phosphor-react-native';
+import { useAuthStore } from '@/store/useAuthStore';
 import { Screen, Input, Button } from '@/components/ui';
 import Typo from '@/components/Typo';
 import AuthHeader from '@/components/AuthHeader';
 import GoogleLogo from '@/components/GoogleLogo';
-import { lightTheme, spacingX, spacingY, radius } from '@/constants/theme';
-import { getEmailError } from '@/utils/validation';
-import { getApiErrorMessage } from '@/utils/apiError';
+import { spacingX, spacingY, radius } from '@/constants/theme';
+import { getEmailError, normalizeEmail } from '@/utils/validation';
+import { getApiErrorMessage } from '@/services/apiError';
+import { useTheme } from '@/hooks/useTheme';
 
 export default function SignIn() {
   const router = useRouter();
+  const theme = useTheme();
   const [email, setEmail] = useState('');
   const [emailTouched, setEmailTouched] = useState(false);
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const signIn = useAuthStore((s) => s.signIn);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const emailError = getEmailError(email);
   const isFormValid = email.length > 0 && !emailError && password.length > 0;
@@ -27,7 +30,7 @@ export default function SignIn() {
 
     setIsSubmitting(true);
     try {
-      await signIn(email, password);
+      await signIn(normalizeEmail(email), password);
     } catch (err) {
       Alert.alert(
         'Sign in failed',
@@ -44,20 +47,20 @@ export default function SignIn() {
   };
 
   return (
-    <Screen scroll>
+    <Screen keyboardAware scroll scrollViewRef={scrollViewRef}>
       <AuthHeader />
 
-      <Typo size={24} color={lightTheme.text.primary} fontWeight="bold" style={{ marginBottom: 4 }}>
+      <Typo size={24} color={theme.text.primary} fontWeight="bold" style={{ marginBottom: 4 }}>
         Welcome back
       </Typo>
-      <Typo size={14} color={lightTheme.text.secondary} style={{ marginBottom: spacingY.xl }}>
+      <Typo size={14} color={theme.text.secondary} style={{ marginBottom: spacingY.xl }}>
         Sign in to continue your journey
       </Typo>
 
       <Input
         label="Email address"
         placeholder="adaeze@email.com"
-        leftIcon={EnvelopeIcon}
+        leftIcon={Icon.EnvelopeIcon}
         keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}
@@ -87,7 +90,7 @@ export default function SignIn() {
         onPress={() => router.push('/(auth)/forgot-password')}
         style={{ alignSelf: 'flex-end', marginBottom: spacingY.lg }}
       >
-        <Typo size={13} fontWeight="600" color={lightTheme.accent.default}>
+        <Typo size={13} fontWeight="600" color={theme.accent.default}>
           Forgot password?
         </Typo>
       </Pressable>
@@ -107,15 +110,11 @@ export default function SignIn() {
           marginVertical: spacingY.xl,
         }}
       >
-        <View style={{ flex: 1, height: 1, backgroundColor: lightTheme.border }} />
-        <Typo
-          size={13}
-          color={lightTheme.text.secondary}
-          style={{ marginHorizontal: spacingX.md }}
-        >
+        <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
+        <Typo size={13} color={theme.text.secondary} style={{ marginHorizontal: spacingX.md }}>
           or continue with
         </Typo>
-        <View style={{ flex: 1, height: 1, backgroundColor: lightTheme.border }} />
+        <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
       </View>
 
       <Pressable
@@ -126,31 +125,35 @@ export default function SignIn() {
           justifyContent: 'center',
           gap: spacingX.sm,
           borderWidth: 1,
-          borderColor: lightTheme.border,
+          borderColor: theme.border,
           borderRadius: radius.full,
           paddingVertical: spacingY.md,
-          backgroundColor: lightTheme.background.card,
+          backgroundColor: theme.background.card,
         }}
       >
         <GoogleLogo size={18} />
-        <Typo size={15} fontWeight="600" color={lightTheme.text.primary}>
+        <Typo size={15} fontWeight="600" color={theme.text.primary}>
           Continue with Google
         </Typo>
       </Pressable>
 
       <Pressable
-        onPress={() => router.push('/(auth)/sign-up')}
+        onPress={() => router.replace('/(auth)/sign-up')}
+        accessibilityRole="link"
+        accessibilityLabel="New to PREGO? Create an account"
         style={{
           flexDirection: 'row',
+          alignItems: 'center',
           justifyContent: 'center',
+          minHeight: 44,
           marginTop: spacingY.xl,
         }}
       >
-        <Typo size={14} color={lightTheme.text.secondary}>
+        <Typo size={14} color={theme.text.secondary}>
           New to PREGO?{' '}
         </Typo>
-        <Typo size={14} fontWeight="700" color={lightTheme.accent.default}>
-          Create account
+        <Typo size={14} fontWeight="700" color={theme.accent.default}>
+          Create an account
         </Typo>
       </Pressable>
     </Screen>
